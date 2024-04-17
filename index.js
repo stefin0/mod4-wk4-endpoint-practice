@@ -41,7 +41,6 @@ app.use(express.json());
 app.get("/car", async function(req, res) {
   const { id } = req.params;
   try {
-    console.log("/cars");
     const [cars] = await req.db.query(
       `SELECT * FROM car WHERE deleted_flag = 0;`,
       {
@@ -61,35 +60,59 @@ app.use(async function(req, res, next) {
 });
 
 app.post("/car", async function(req, res) {
-  try {
-    const { make, model, year } = req.body;
+  const { make, model, year } = req.body;
 
+  if (!make || !model || !year) {
+    return res
+      .status(400)
+      .json({ message: "All fields are required: make, model, year" });
+  }
+
+  try {
     const query = await req.db.query(
       `INSERT INTO car (make, model, year) 
-       VALUES (:make, :model, :year)`,
+       VALUES (:make, :model, :year);`,
       {
         make,
         model,
         year,
       },
     );
+    console.log(query);
 
-    res.json({
-      success: true,
+    res.status(201).json({
       message: "Car successfully created",
-      data: null,
     });
   } catch (err) {
-    res.json({ success: false, message: err, data: null });
+    console.error(err);
+    res.status(500).json({ message: err });
   }
 });
 
 app.delete("/car/:id", async function(req, res) {
-  try {
-    console.log("req.params /car/:id", req.params);
+  const { id } = req.params;
 
-    res.json("success");
-  } catch (err) { }
+  if (!parseInt(id)) {
+    return res.status(400).json({ error: "Invalid ID format" });
+  }
+
+  try {
+    const [result] = await req.db.query(
+      `UPDATE car SET deleted_flag = 1 WHERE id = :id;`,
+      {
+        id,
+      },
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Car not found" });
+    }
+
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.put("/car/:id", async function(req, res) {
@@ -130,8 +153,8 @@ app.put("/car/:id", async function(req, res) {
       return res.status(404).send("Car not found");
     }
 
-    res.json({...data, success: true});
-  } catch (err) { 
+    res.json({ ...data, success: true });
+  } catch (err) {
     console.error("Failed to update car:", err);
     res.status(500).send("Error updating car");
   }
